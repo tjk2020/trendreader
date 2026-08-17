@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B0E14">
+<title>Trend Reader</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230B0E14'/%3E%3Cpath d='M15 65 L38 42 L52 56 L85 25' stroke='%2334D399' stroke-width='7' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Trend Reader">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0B0E14;
+    --surface:#131822;
+    --surface-2:#171D29;
+    --border:#232938;
+    --text:#E4E7EC;
+    --text-muted:#8B93A7;
+    --bull:#34D399;
+    --bull-dim:#34D39926;
+    --bear:#FB7185;
+    --bear-dim:#FB718526;
+    --amber:#FBBF24;
+    --amber-dim:#FBBF2426;
+    --accent:#60A5FA;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:48px;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  header{
+    position:sticky; top:0; z-index:10;
+    background:rgba(11,14,20,0.92);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--border);
+    padding:14px 16px 12px;
+  }
+  .brand{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:19px;
+    letter-spacing:-0.01em;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:12px;
+  }
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--bull);box-shadow:0 0 8px var(--bull);}
+  .search-row{display:flex; gap:8px;}
+  input[type=text]{
+    flex:1;
+    background:var(--surface);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:10px;
+    padding:11px 12px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:15px;
+    text-transform:uppercase;
+    outline:none;
+  }
+  input[type=text]:focus{border-color:var(--accent);}
+  select{
+    background:var(--surface);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:10px;
+    padding:0 10px;
+    font-size:13px;
+    font-family:'Inter',sans-serif;
+  }
+  button#analyzeBtn{
+    background:var(--accent);
+    color:#0B0E14;
+    border:none;
+    border-radius:10px;
+    padding:0 18px;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+  }
+  button#analyzeBtn:active{opacity:0.85;}
+  .examples{
+    margin-top:8px;
+    font-size:11.5px;
+    color:var(--text-muted);
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+  .examples span{
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:999px;
+    padding:3px 9px;
+    cursor:pointer;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  main{padding:16px; max-width:640px; margin:0 auto;}
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:14px;
+  }
+  .card h2{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:12px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--text-muted);
+    margin:0 0 12px;
+    font-weight:600;
+  }
+  #state-empty{text-align:center; padding:60px 20px; color:var(--text-muted);}
+  #state-empty .big{font-size:32px; margin-bottom:10px;}
+  #state-loading{display:none; text-align:center; padding:60px 20px; color:var(--text-muted);}
+  #state-error{display:none; color:var(--bear); background:var(--bear-dim); border:1px solid var(--bear); border-radius:var(--radius); padding:14px; margin-bottom:14px; font-size:14px;}
+  #results{display:none;}
+
+  /* Signal hero */
+  .signal-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;}
+  .ticker-name{font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:20px;}
+  .last-price{font-family:'IBM Plex Mono',monospace; font-size:15px; color:var(--text-muted);}
+  .label{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:26px;
+    margin:10px 0 14px;
+  }
+  .label.bull{color:var(--bull);}
+  .label.bear{color:var(--bear);}
+  .label.neutral{color:var(--amber);}
+  .label.none{color:var(--text-muted);}
+
+  .depthbar{
+    height:14px;
+    border-radius:7px;
+    overflow:hidden;
+    display:flex;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    margin-bottom:6px;
+  }
+  .depthbar .seg{height:100%;}
+  .depth-labels{display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); font-family:'IBM Plex Mono',monospace; margin-bottom:14px;}
+
+  .regime-sentence{font-size:14px; line-height:1.5; color:var(--text-muted); margin-bottom:10px;}
+  .confidence-note{
+    font-size:12.5px;
+    color:var(--amber);
+    background:var(--amber-dim);
+    border:1px solid #FBBF2450;
+    border-radius:10px;
+    padding:8px 10px;
+    line-height:1.5;
+  }
+  .sample-size{font-size:12px; color:var(--text-muted); font-family:'IBM Plex Mono',monospace;}
+
+  /* Indicator grid */
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .stat{background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px 12px;}
+  .stat .k{font-size:10.5px; letter-spacing:0.05em; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;}
+  .stat .v{font-family:'IBM Plex Mono',monospace; font-size:17px; font-weight:600;}
+  .stat .v.bull{color:var(--bull);}
+  .stat .v.bear{color:var(--bear);}
+
+  canvas#priceChart{width:100%!important; max-height:220px;}
+
+  /* Backtest table */
+  .bt-row{display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); font-size:13.5px;}
+  .bt-row:last-child{border-bottom:none;}
+  .bt-row .horizon{color:var(--text-muted);}
+  .bt-row .vals{font-family:'IBM Plex Mono',monospace; text-align:right;}
+
+  footer{
+    max-width:640px; margin:0 auto; padding:0 16px 40px;
+    font-size:11.5px; color:var(--text-muted); line-height:1.6;
+  }
+  footer b{color:var(--text);}
+  .install-hint{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:12px 14px; margin-bottom:14px; font-size:12.5px; color:var(--text-muted);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="dot"></span>Trend Reader</div>
+  <div class="search-row">
+    <input id="tickerInput" type="text" placeholder="e.g. RELIANCE.NS or AAPL" autocapitalize="characters" autocomplete="off">
+    <select id="assetType">
+      <option value="stock">Stock</option>
+      <option value="index">Index</option>
+      <option value="currency">Currency</option>
+      <option value="commodity">Commodity</option>
+    </select>
+    <button id="analyzeBtn">Read</button>
+  </div>
+  <div class="examples" id="examples"></div>
+</header>
+
+<main>
+  <div id="state-error"></div>
+
+  <div id="state-empty">
+    <div class="big">📈</div>
+    Enter a ticker above to see its historical-analog trend read.
+  </div>
+
+  <div id="state-loading">Pulling price history and running the backtest…</div>
+
+  <div id="results">
+    <div class="card">
+      <div class="signal-head">
+        <div class="ticker-name mono" id="r-ticker">—</div>
+        <div class="last-price" id="r-price">—</div>
+      </div>
+      <div class="label" id="r-label">—</div>
+      <div class="depthbar" id="r-depthbar"></div>
+      <div class="depth-labels"><span>Bear</span><span>Neutral</span><span>Bull</span></div>
+      <div class="regime-sentence" id="r-regime">—</div>
+      <div class="sample-size" id="r-sample"></div>
+      <div class="confidence-note" id="r-confnote" style="display:none; margin-top:10px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Indicators</h2>
+      <div class="grid" id="r-indicators"></div>
+    </div>
+
+    <div class="card">
+      <h2>Price · SMA 20 / 50 / 200</h2>
+      <canvas id="priceChart"></canvas>
+    </div>
+
+    <div class="card">
+      <h2>Historical analog backtest</h2>
+      <div class="bt-row">
+        <div class="horizon">~3 weeks (15 trading days)</div>
+        <div class="vals" id="bt-15">—</div>
+      </div>
+      <div class="bt-row">
+        <div class="horizon">~4 weeks (20 trading days)</div>
+        <div class="vals" id="bt-20">—</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="install-hint">📲 Add to your home screen (browser share/menu → "Add to Home Screen") to use this like an app.</div>
+  <b>What this is:</b> a historical-analog base rate. It finds past times this exact ticker showed the same indicator combination it shows today, and reports how price actually moved over the following 3–4 weeks in those instances. It is not a prediction, not investment advice, and small sample sizes mean low confidence — always shown alongside the read.
+</footer>
+
+<script>
+const EXAMPLES = {
+  stock: ["RELIANCE.NS", "TCS.NS", "AAPL", "MSFT"],
+  index: ["^NSEI", "^NSEBANK", "^GSPC", "^DJI"],
+  currency: ["INR=X", "EURUSD=X", "GBPUSD=X", "JPY=X"],
+  commodity: ["GC=F", "SI=F", "CL=F", "NG=F"],
+};
+
+const assetTypeEl = document.getElementById('assetType');
+const tickerInput = document.getElementById('tickerInput');
+const examplesEl = document.getElementById('examples');
+
+function renderExamples(){
+  const list = EXAMPLES[assetTypeEl.value];
+  examplesEl.innerHTML = '';
+  list.forEach(t => {
+    const s = document.createElement('span');
+    s.textContent = t;
+    s.onclick = () => { tickerInput.value = t; runAnalysis(); };
+    examplesEl.appendChild(s);
+  });
+}
+assetTypeEl.addEventListener('change', renderExamples);
+renderExamples();
+
+let chart;
+
+function setState(state){
+  document.getElementById('state-empty').style.display = state === 'empty' ? '' : 'none';
+  document.getElementById('state-loading').style.display = state === 'loading' ? '' : 'none';
+  document.getElementById('state-error').style.display = state === 'error' ? '' : 'none';
+  document.getElementById('results').style.display = state === 'results' ? '' : 'none';
+}
+
+function labelClass(label){
+  if(label === 'Bullish lean') return 'bull';
+  if(label === 'Bearish lean') return 'bear';
+  if(label === 'No clear edge') return 'neutral';
+  return 'none';
+}
+
+function renderDepthBar(pct){
+  const bar = document.getElementById('r-depthbar');
+  bar.innerHTML = '';
+  if(pct === null || pct === undefined){
+    const seg = document.createElement('div');
+    seg.className = 'seg'; seg.style.width = '100%'; seg.style.background = 'var(--border)';
+    bar.appendChild(seg);
+    return;
+  }
+  // three segments: bear (<45), neutral (45-55 band width fixed visually), bull (>55)
+  const bullW = Math.max(0, Math.min(100, pct));
+  const bearW = 100 - bullW;
+  const segBear = document.createElement('div');
+  segBear.className = 'seg'; segBear.style.width = bearW + '%'; segBear.style.background = 'var(--bear)';
+  const segBull = document.createElement('div');
+  segBull.className = 'seg'; segBull.style.width = bullW + '%'; segBull.style.background = 'var(--bull)';
+  bar.appendChild(segBear);
+  bar.appendChild(segBull);
+}
+
+function fmtPct(v){ return (v === null || v === undefined) ? '—' : v.toFixed(1) + '%'; }
+function fmtRet(v){ return (v === null || v === undefined) ? '—' : (v > 0 ? '+' : '') + v.toFixed(2) + '%'; }
+
+function renderIndicators(ind){
+  const rows = [
+    ['RSI (14)', ind.rsi14, ind.rsi14 > 55 ? 'bull' : (ind.rsi14 < 45 ? 'bear' : '')],
+    ['MACD hist', ind.macd_hist.toFixed(3), ind.macd_hist > 0 ? 'bull' : 'bear'],
+    ['ADX (14)', ind.adx14, ''],
+    ['ATR (14)', ind.atr14.toFixed(2), ''],
+    ['+DI / -DI', ind.plus_di.toFixed(0) + ' / ' + ind.minus_di.toFixed(0), ind.plus_di > ind.minus_di ? 'bull' : 'bear'],
+    ['Volume ratio', ind.volume_ratio ? ind.volume_ratio.toFixed(2) + '×' : '—', ''],
+  ];
+  const grid = document.getElementById('r-indicators');
+  grid.innerHTML = '';
+  rows.forEach(([k,v,cls]) => {
+    const el = document.createElement('div');
+    el.className = 'stat';
+    el.innerHTML = `<div class="k">${k}</div><div class="v ${cls}">${v}</div>`;
+    grid.appendChild(el);
+  });
+}
+
+function renderChart(series){
+  const labels = series.map(p => p.date);
+  const ctx = document.getElementById('priceChart').getContext('2d');
+  if(chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label:'Close', data: series.map(p=>p.close), borderColor:'#E4E7EC', borderWidth:1.6, pointRadius:0, tension:0.15 },
+        { label:'SMA20', data: series.map(p=>p.sma20), borderColor:'#60A5FA', borderWidth:1.2, pointRadius:0, tension:0.15 },
+        { label:'SMA50', data: series.map(p=>p.sma50), borderColor:'#FBBF24', borderWidth:1.2, pointRadius:0, tension:0.15 },
+        { label:'SMA200', data: series.map(p=>p.sma200), borderColor:'#FB7185', borderWidth:1.2, pointRadius:0, tension:0.15 },
+      ]
+    },
+    options: {
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{ legend:{ labels:{ color:'#8B93A7', boxWidth:10, font:{size:10} } } },
+      scales:{
+        x:{ ticks:{ color:'#8B93A7', maxTicksLimit:6, font:{size:9} }, grid:{ color:'#232938' } },
+        y:{ ticks:{ color:'#8B93A7', font:{size:9} }, grid:{ color:'#232938' } },
+      }
+    }
+  });
+  document.getElementById('priceChart').style.height = '220px';
+}
+
+async function runAnalysis(){
+  const ticker = tickerInput.value.trim();
+  if(!ticker) return;
+  setState('loading');
+  try{
+    const res = await fetch('/api/analyze?ticker=' + encodeURIComponent(ticker));
+    const data = await res.json();
+    if(!res.ok){
+      document.getElementById('state-error').textContent = data.error || 'Something went wrong.';
+      setState('error');
+      return;
+    }
+    document.getElementById('r-ticker').textContent = data.ticker.toUpperCase();
+    document.getElementById('r-price').textContent = data.last_close + '  ·  ' + data.as_of;
+    const dr = data.directional_read;
+    const labelEl = document.getElementById('r-label');
+    labelEl.textContent = dr.label + (dr.probability_up_pct !== null ? ` (${dr.probability_up_pct.toFixed(1)}% up historically)` : '');
+    labelEl.className = 'label ' + labelClass(dr.label);
+    renderDepthBar(dr.probability_up_pct);
+    document.getElementById('r-regime').textContent = data.regime.plain_english;
+    document.getElementById('r-sample').textContent = `Based on ${dr.sample_size} historical instance${dr.sample_size===1?'':'s'} of this same setup over ${data.backtest.lookback_years} years.`;
+    const noteEl = document.getElementById('r-confnote');
+    if(dr.confidence_note){ noteEl.style.display=''; noteEl.textContent = dr.confidence_note; }
+    else { noteEl.style.display = 'none'; }
+
+    renderIndicators(data.indicators);
+    renderChart(data.price_series);
+
+    const b15 = data.backtest.horizon_15d, b20 = data.backtest.horizon_20d;
+    document.getElementById('bt-15').innerHTML = b15.sample_size
+      ? `n=${b15.sample_size} · ${fmtPct(b15.pct_positive)} up · avg ${fmtRet(b15.avg_return_pct)}`
+      : 'no matches';
+    document.getElementById('bt-20').innerHTML = b20.sample_size
+      ? `n=${b20.sample_size} · ${fmtPct(b20.pct_positive)} up · avg ${fmtRet(b20.avg_return_pct)}`
+      : 'no matches';
+
+    setState('results');
+  } catch(e){
+    document.getElementById('state-error').textContent = 'Network or server error: ' + e.message;
+    setState('error');
+  }
+}
+
+document.getElementById('analyzeBtn').addEventListener('click', runAnalysis);
+tickerInput.addEventListener('keydown', e => { if(e.key === 'Enter') runAnalysis(); });
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
