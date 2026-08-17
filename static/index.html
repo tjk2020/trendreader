@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
   :root{
     --bg:#0B0E14;
@@ -352,6 +352,19 @@ function renderIndicators(ind){
 }
 
 function renderChart(series){
+  const canvas = document.getElementById('priceChart');
+  if(typeof Chart === 'undefined'){
+    canvas.style.display = 'none';
+    let msg = document.getElementById('chart-unavailable-msg');
+    if(!msg){
+      msg = document.createElement('div');
+      msg.id = 'chart-unavailable-msg';
+      msg.style.cssText = 'color:var(--text-muted); font-size:13px; padding:10px 0;';
+      msg.textContent = 'Chart library failed to load (likely blocked by an ad-blocker or network filter) — the read above is still accurate, just no chart.';
+      canvas.parentNode.appendChild(msg);
+    }
+    return;
+  }
   const labels = series.map(p => p.date);
   const ctx = document.getElementById('priceChart').getContext('2d');
   if(chart) chart.destroy();
