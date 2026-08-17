@@ -16,32 +16,42 @@ from flask import Flask, jsonify, request, send_from_directory
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import requests
 import time
 from datetime import datetime
+
+try:
+    # curl_cffi impersonates a real browser's TLS/HTTP2 fingerprint, which
+    # Yahoo's anti-bot layer trusts more than a plain requests session. This
+    # is the current community-recommended mitigation for yfinance rate
+    # limiting. Falls back to a plain requests session if unavailable.
+    from curl_cffi import requests as curl_requests
+    _SESSION = curl_requests.Session(impersonate="chrome")
+except ImportError:
+    import requests
+    _SESSION = requests.Session()
+    _SESSION.headers.update({
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
+    })
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
 # ----------------------------------------------------------------------------
-# Yahoo Finance (via yfinance) rate-limits aggressively by IP, and free cloud
-# hosts share a small pool of outbound IPs across many unrelated apps, so
-# this server can get rate-limited even if THIS app makes very few requests.
-# Two mitigations: (1) a short in-memory cache so repeat/duplicate lookups
-# never re-hit Yahoo, (2) a realistic browser session + retry-with-backoff so
-# transient blips resolve themselves without the user having to know that.
+# Yahoo Finance (via yfinance) rate-limits by hitting its own crumb/cookie
+# auth step, and this has been an ongoing, community-wide issue since Yahoo
+# tightened its anti-bot system — it happens in waves and isn't specific to
+# any one IP or setup. Mitigations here: (1) browser-fingerprint impersonation
+# via curl_cffi, (2) a short in-memory cache so repeat lookups never re-hit
+# Yahoo, (3) retry-with-backoff for transient blips. None of this can
+# guarantee zero failures — that's inherent to using a free, unofficial data
+# source — but it meaningfully reduces how often you'll see it.
 # ----------------------------------------------------------------------------
 
 _CACHE = {}
 _CACHE_TTL_SECONDS = 20 * 60  # 20 minutes
 
-_SESSION = requests.Session()
-_SESSION.headers.update({
-    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
-})
 
-
-def fetch_history_with_retry(ticker: str, period: str, retries: int = 3, base_delay: float = 2.0):
+def fetch_history_with_retry(ticker: str, period: str, retries: int = 3, base_delay: float = 3.0):
     last_exc = None
     for attempt in range(retries):
         try:
