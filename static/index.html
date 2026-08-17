@@ -296,10 +296,10 @@ renderExamples();
 let chart;
 
 function setState(state){
-  document.getElementById('state-empty').style.display = state === 'empty' ? '' : 'none';
-  document.getElementById('state-loading').style.display = state === 'loading' ? '' : 'none';
-  document.getElementById('state-error').style.display = state === 'error' ? '' : 'none';
-  document.getElementById('results').style.display = state === 'results' ? '' : 'none';
+  document.getElementById('state-empty').style.display = state === 'empty' ? 'block' : 'none';
+  document.getElementById('state-loading').style.display = state === 'loading' ? 'block' : 'none';
+  document.getElementById('state-error').style.display = state === 'error' ? 'block' : 'none';
+  document.getElementById('results').style.display = state === 'results' ? 'block' : 'none';
 }
 
 function labelClass(label){
