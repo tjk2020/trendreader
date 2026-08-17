@@ -16,9 +16,43 @@ from flask import Flask, jsonify, request, send_from_directory
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import requests
+import time
 from datetime import datetime
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
+
+# ----------------------------------------------------------------------------
+# Yahoo Finance (via yfinance) rate-limits aggressively by IP, and free cloud
+# hosts share a small pool of outbound IPs across many unrelated apps, so
+# this server can get rate-limited even if THIS app makes very few requests.
+# Two mitigations: (1) a short in-memory cache so repeat/duplicate lookups
+# never re-hit Yahoo, (2) a realistic browser session + retry-with-backoff so
+# transient blips resolve themselves without the user having to know that.
+# ----------------------------------------------------------------------------
+
+_CACHE = {}
+_CACHE_TTL_SECONDS = 20 * 60  # 20 minutes
+
+_SESSION = requests.Session()
+_SESSION.headers.update({
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
+})
+
+
+def fetch_history_with_retry(ticker: str, period: str, retries: int = 3, base_delay: float = 2.0):
+    last_exc = None
+    for attempt in range(retries):
+        try:
+            return yf.Ticker(ticker, session=_SESSION).history(period=period, interval="1d", auto_adjust=True)
+        except Exception as exc:  # yfinance raises various exception types for 429s
+            last_exc = exc
+            if "Rate limit" in str(exc) or "Too Many Requests" in str(exc) or "429" in str(exc):
+                time.sleep(base_delay * (attempt + 1))
+                continue
+            raise
+    raise last_exc
 
 # ----------------------------------------------------------------------------
 # Indicator math (implemented by hand with pandas so the only hard dependency
@@ -160,7 +194,12 @@ def plain_english(regime: dict, adx_val: float) -> str:
 # ----------------------------------------------------------------------------
 
 def analyze_ticker(ticker: str, lookback_years: int = 6):
-    raw = yf.Ticker(ticker).history(period=f"{lookback_years}y", interval="1d", auto_adjust=True)
+    cache_key = ticker.upper()
+    cached = _CACHE.get(cache_key)
+    if cached and (time.time() - cached[0]) < _CACHE_TTL_SECONDS:
+        return cached[1], None
+
+    raw = fetch_history_with_retry(ticker, period=f"{lookback_years}y")
     if raw is None or raw.empty or len(raw) < 220:
         return None, f"Not enough price history found for '{ticker}' (need at least ~1 year of daily data)."
 
@@ -301,6 +340,7 @@ def analyze_ticker(ticker: str, lookback_years: int = 6):
             "confidence_note": confidence_note,
         },
     }
+    _CACHE[cache_key] = (time.time(), result)
     return result, None
 
 
@@ -331,6 +371,12 @@ def api_analyze():
     try:
         result, err = analyze_ticker(ticker)
     except Exception as exc:  # yfinance / network / bad-symbol errors land here
+        msg = str(exc)
+        if "Rate limit" in msg or "Too Many Requests" in msg or "429" in msg:
+            friendly = ("Yahoo Finance is temporarily rate-limiting this server — this happens "
+                        "sometimes on free hosting since many apps share the same outbound IP. "
+                        "Wait a few minutes and try again; it usually clears on its own.")
+            return jsonify({"error": friendly}), 429
         return jsonify({"error": f"Couldn't fetch or analyze '{ticker}': {exc}"}), 502
     if err:
         return jsonify({"error": err}), 404
